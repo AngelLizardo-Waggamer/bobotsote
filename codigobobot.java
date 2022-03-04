@@ -4,29 +4,24 @@
 
 package frc.robot;
 
+
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.I2C;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.TimedRobot;
 import edu.wpi.first.wpilibj.Timer;
-import edu.wpi.first.wpilibj.drive.DifferentialDrive;
-import edu.wpi.first.wpilibj.motorcontrol.PWMSparkMax;
+import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj.motorcontrol.Spark;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
-import edu.wpi.first.wpilibj.util.Color;
 import com.revrobotics.ColorSensorV3;
 
 import com.revrobotics.RelativeEncoder;
 
-import javax.lang.model.util.ElementScanner6;
 
 import com.revrobotics.CANSparkMax;
 import com.revrobotics.CANSparkMaxLowLevel.MotorType;
-
-
-import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.networktables.NetworkTable;
 import edu.wpi.first.networktables.NetworkTableEntry;
 import edu.wpi.first.networktables.NetworkTableInstance;
@@ -53,6 +48,7 @@ public class Robot extends TimedRobot {
   private Spark shooter1; // num: 4
   private Spark elevador1;  //Elevadores  num: 5
   private Spark elevador2;  //Elevadores  num: 6
+  private Spark elevadorSec; // Elevador contrario num: 7
 
  
   // poder de los motores
@@ -60,6 +56,30 @@ public class Robot extends TimedRobot {
   double rightPower; // lado derecho del chasis
   boolean intekOn = false;
   boolean shooterOn = false;
+
+  //Autónomo
+  int hw;
+  double VueltasPorMetro = 10.75/((15.25*Math.PI)/100);
+  
+  double DyMenos = -1.2;
+  double DyMas = 1.2;
+  double DxMenos = -1.2;
+  double DxMas =   1.2;
+  boolean isAligned = false;
+
+  double pyMenos = 1 - 2.5;
+  double pyMas = 1 + 2.5;
+  double pxMenos = 28 - 2.5;
+  double pxMas =   28 + 2.5;
+  
+
+  //Potencia
+  double PotA = 0.85;
+  double PotG = 0.4;
+
+  static final int CAM_W = 320;
+  static final int CAM_H = 240;
+
 
 
   //Camara config
@@ -71,38 +91,48 @@ public class Robot extends TimedRobot {
   
   //Camara
   //read values periodically
-  double xll = tx.getDouble(0.0);
-  double yll = ty.getDouble(0.0);
-  double all = ta.getDouble(0.0);
+  double xll;
+  double yll;
+  double all;
+   //Servo Camara
+  int alianza = 0;
 
 
-
-// --- ni idea de que es lo que hay en las siguientes lineas
-  /*private final PWMSparkMax m_leftDrive = new PWMSparkMax(0);
-  private final PWMSparkMax m_rightDrive = new PWMSparkMax(1);
-  private final DifferentialDrive m_robotDrive = new DifferentialDrive(m_leftDrive, m_rightDrive);*/
-  private final Joystick drive_Joy = new Joystick(0);
+  private final XboxController drive_Joy = new XboxController(0);
   private final Joystick Shoot_Joy = new Joystick(1);
-  //private final Joystick m2s = new Joystick(1);
-  private final Timer m_timer = new Timer();
+  
+  String direccion = "uy kieto";
+
   private Command m_autonomousCommand;
   private RobotContainer m_robotContainer;
   private RelativeEncoder m_encoder_TEST;
   private double encoder_init;
   private double encoder;
-  //private final I2C.Port i2cPort = I2C.Port.kOnboard;
-  //private final ColorSensorV3 sensorColor = new ColorSensorV3(i2cPort);
+  private final I2C.Port i2cPort = I2C.Port.kOnboard;
+  private final ColorSensorV3 sensorColor = new ColorSensorV3(i2cPort);
   /**
    * This function is run when the robot is first started up and should be used for any
    * initialization code.
    */
   @Override
   public void robotInit() {
+
+    isAligned = false;
     try{
       chasis_motorR1 = new CANSparkMax(3, MotorType.kBrushless);
       chasis_motorL1 = new CANSparkMax(5, MotorType.kBrushless); //Chasis
       chasis_motorL2 = new CANSparkMax(2, MotorType.kBrushless);
       chasis_motorR2 = new CANSparkMax(4, MotorType.kBrushless);
+      // demas motores
+      MotorPI = new Spark(0);               //Metedor Interior num: 0
+      MotorPE = new Spark(1);               //Metedor Exterior intake num: 1
+      putito  = new Spark(2);               // el redline del elevador num: 2
+      shooter2 = new Spark(3);              // shooter num: 3
+      shooter1 = new Spark(4);              // shooter num: 4
+      elevador1 = new Spark(5);             //Elevadores  num: 5
+      elevador2 = new Spark(6);             //Elevadores  num: 6
+      elevadorSec = new Spark(7);           // Elevador motor secundario num: 7
+
     } catch (Exception e ){
 
     }
@@ -119,18 +149,7 @@ public class Robot extends TimedRobot {
     chasis_motorR2.follow(chasis_motorR1);
 
     
-    try{
-      // demas motores
-      MotorPI = new Spark(0);               //Metedor Interior num: 0
-      MotorPE = new Spark(1);               //Metedor Exterior intake num: 1
-      putito  = new Spark(2);  // el redline del elevador num: 2
-      shooter2 = new Spark(3);              // shooter num: 3
-      shooter1 = new Spark(4);              // shooter num: 4
-      elevador1 = new Spark(5);             //Elevadores  num: 5
-      elevador2 = new Spark(6);             //Elevadores  num: 6
-    } catch (Exception e ){
-
-    }
+   
 
 
 
@@ -162,6 +181,35 @@ public class Robot extends TimedRobot {
     xll = tx.getDouble(0.0);
     yll = ty.getDouble(0.0);
     all = ta.getDouble(0.0);
+   
+
+    /*SmartDashboard.putNumber("distancia", sensorColor.getProximity());
+    SmartDashboard.putNumber("Red", sensorColor.getRed());
+    SmartDashboard.putNumber("Green", sensorColor.getGreen());
+    SmartDashboard.putNumber("Blue", sensorColor.getBlue());*/
+    SmartDashboard.putNumber("LimelightX", xll);
+    SmartDashboard.putNumber("LimelightY", yll);
+    SmartDashboard.putNumber("LimelightArea", all);
+    SmartDashboard.putString("direccion", direccion);
+    SmartDashboard.putBoolean("al menos si se esta subiendo esto", isAligned);
+    switch (DriverStation.getAlliance()){
+      case Red:
+        alianza = 1;
+        break;
+      case Blue:
+        alianza = 2;
+        break;
+      default:
+        alianza = 0;
+    }
+    SmartDashboard.putNumber("Alianza", alianza);
+    // http://10.56.96.11:5801/
+    // Y = -1.8 | -2.3
+    if (xll > DxMenos && xll < DxMas && yll > DyMenos && yll < DyMas){
+      isAligned = true;
+    }else{
+      isAligned = false;
+    }
     CommandScheduler.getInstance().run();  
   }
 
@@ -181,38 +229,174 @@ public class Robot extends TimedRobot {
     if (m_autonomousCommand != null) {
       m_autonomousCommand.schedule();
     }
+    hw = 1;
   }
 
   /** This function is called periodically during autonomous. */
   @Override
   public void autonomousPeriodic() {
-    encoder = m_encoder_TEST.getPosition();
-    if (encoder_init - 60 < encoder){
-      RobotMoveAut(-0.5, 0);
-    } else {
-      RobotMove(0, 0);  
-      shooter1.set(-1);
-      Timer.delay(1);
-      shooter1.set(0);
-    }
 
-    /*if (m_timer.get() < 2.0) {
-      m_robotDrive.arcadeDrive(0.5, 0.0); // drive forwards half speed
-    } else {
-      m_robotDrive.stopMotor(); // stop robot
-    }*/
+
+
+    encoder = m_encoder_TEST.getPosition();
+
+    switch (hw){
+      case 1:
+        if (encoder_init - (1.9*VueltasPorMetro) < encoder){
+          RobotMoveAut(-0.3, 0);
+        } else if (encoder_init - (2.5*VueltasPorMetro) < encoder){
+          RobotMoveAut(-0.1, 0);
+        }else{
+          RobotMoveAut(0, 0);
+          
+          //x=0.7, y = 1.7
+          table.getEntry("pipeline").setValue(0);
+          hw++;
+          //12345678
+        }
+        break;
+
+      case 2:
+        
+        // Apuntar 
+        if(!isAligned && xll != 0 && yll != 0){
+          if (xll < DxMenos) {
+              direccion = "adelante";
+            //while (xll < DxMenos) {
+              // ADELANTE 
+              RobotMoveAut(-0.1, 0);
+            //} 
+            
+          }
+
+          if (xll > DxMas) {
+            direccion = "atras";
+            //while(xll > DxMas) {
+              // ATRAS
+              RobotMoveAut(0.1, 0);
+            //}
+            
+          }
+         if(yll < DyMenos){
+          direccion = "izquierda";
+          //while (yll < DyMas) {
+            // IZQUIERDA
+            RobotMoveAut(0,-0.1);
+          //}
+        }
+        if (yll > DyMas) {
+          direccion = "derecha";
+          //while(yll > DyMenos) {
+            //DERECHA
+            RobotMoveAut(0,0.1);
+          //}
+          }
+            
+        }else if (xll == 0 && yll == 0){
+          RobotMoveAut(0, -0.1);
+        }else{
+          RobotMove(0,0);
+          autShoot();
+          if (alianza == 1){
+            table.getEntry("pipeline").setValue(1);
+          }else{
+            table.getEntry("pipeline").setValue(2);
+          }
+          hw++;
+        }
+        // Cuando se tengan dos pelotas, pasar a tarea 3
+        break;
+      case 3:
+      
+      // Reutilizar el codigo para seguir la pelota
+      if(xll == 0 && yll == 0){
+        RobotMoveAut(0, 0.2);
+      }else{
+          
+          if(yll < pyMenos){
+            direccion = "izquierda";
+            RobotMoveAut(0,-0.15);
+          }
+          if (yll > pyMas) {
+            direccion = "derecha";
+            RobotMoveAut(0,0.15);
+          }
+
+          if (yll > DyMenos && yll < DyMas && all > 0.1) {
+            // soltar intake
+            putito.set(0.5);
+            Timer.delay(3);
+            MotorPE.set(0.5);
+            MotorPI.set(-1);
+            RobotMoveAut(0.2, 0);
+            Timer.delay(3);
+            RobotMoveAut(0, 0);
+            MotorPE.set(0);
+            MotorPI.set(0);
+            putito.set(-0.5);
+            Timer.delay(2);
+            putito.set(0);
+            table.getEntry("pipeline").setValue(0);
+            hw++;
+          }
+        }
+        
+        break;
+
+      case 4:
+        // apuntar a la "canasta"
+        isAligned = false;
+        if(!isAligned && xll != 0 && yll != 0){
+          if (xll < DxMenos) {
+              direccion = "adelante";
+            //while (xll < DxMenos) {
+              // ADELANTE 
+              RobotMoveAut(-0.1, 0);
+            //} 
+            
+          }
+
+          if (xll > DxMas) {
+            direccion = "atras";
+            //while(xll > DxMas) {
+              // ATRAS
+              RobotMoveAut(0.1, 0);
+            //}
+            
+          }
+         if(yll < DyMenos){
+          direccion = "izquierda";
+          //while (yll < DyMas) {
+            // IZQUIERDA
+            RobotMoveAut(0,-0.1);
+          //}
+        }
+        if (yll > DyMas) {
+          direccion = "derecha";
+          //while(yll > DyMenos) {
+            //DERECHA
+            RobotMoveAut(0,0.1);
+          //}
+          }
+            
+        }else if (xll == 0 && yll == 0){
+          RobotMoveAut(0, -0.1);
+        }else{
+          RobotMove(0,0);
+          autShoot();
+        }
+        break;
+      default: 
+
+        break;
+    }
+    
   }
 
   @Override
   public void teleopInit() {
-    // This makes sure that the autonomous stops running when
-    // teleop starts running. If you want the autonomous to
-    // continue until interrupted by another command, remove
-    // this line or comment it out.
-
-    // motores de el chasis
    
-    
+    table.getEntry("pipeline").setValue(3);
     if (m_autonomousCommand != null) {
       m_autonomousCommand.cancel();
     }
@@ -222,81 +406,39 @@ public class Robot extends TimedRobot {
   @Override
   public void teleopPeriodic() {
     //m_robotDrive.arcadeDrive(drive_Joy.getY(), drive_Joy.getX());
-
+    
+   
+    if (drive_Joy.getLeftTriggerAxis() > 0){
+      PotA = 0.2;
+    }else{
+      PotA = 0.85;
+    }
     //motorL1.set(drive_Joy.getY());
-    RobotMove(drive_Joy.getY()*0.8, drive_Joy.getX()*0.4);
-    SmartDashboard.putNumber("Encoder Position", m_encoder_TEST.getPosition());
+    if (drive_Joy.getRightTriggerAxis() > 0){
+      PotG = 0.1;
+    }else {
+      PotG = 0.4;
+    }
 
-    //post to smart dashboard periodically
-    SmartDashboard.putNumber("LimelightX", xll);
-    SmartDashboard.putNumber("LimelightY", yll);
-    SmartDashboard.putNumber("LimelightArea", all);
-  
+    RobotMove(drive_Joy.getLeftY()*PotA, drive_Joy.getRightX()*PotG);
+    
 
-    /*if(Shoot_Joy.getRawButton(1)){
-      shooterOn = !shooterOn;
-    }*/
-
+    
     if (Shoot_Joy.getRawButton(4)) {
-      // Mover las pelotas para atrás
-      MotorPI.set(1);
-      MotorPE.set(-0.6);
-      shooter2.set(0.4);
-      Timer.delay(0.15);
-
-      // Parar el motor de abajo y encender el shooter
-      MotorPI.set(0);
-      MotorPE.set(0);
-      shooter1.set(-0.8);
-      shooter2.set(-0.8);
-
-      Timer.delay(1);
-      // Mover las pelotas para arriba
-      MotorPI.set(-1);
-
-      // Delay más largo por si son 2 pelotas
-      Timer.delay(1.5);
-
-      // Parar los 3 motores
-      MotorPI.set(0);
-      shooter1.set(0);
-      shooter2.set(0);
+      lowShoot();
     } 
     if (Shoot_Joy.getRawButton(1)) {
-      // Mover las pelotas para atrás
-      MotorPI.set(1);
-      MotorPE.set(-0.5);
-      shooter2.set(0.4);
-      Timer.delay(0.15);
-
-      // Parar el motor de abajo y encender el shooter
-      MotorPI.set(0);
-      MotorPE.set(0);
-      shooter1.set(-1);
-      shooter2.set(-1);
-
-      Timer.delay(1);
-      // Mover las pelotas para arriba
-      MotorPI.set(-1);
-
-      // Delay más largo por si son 2 pelotas
-      Timer.delay(1.5);
-
-      // Parar los 3 motores
-      MotorPI.set(0);
-      shooter1.set(0);
-      shooter2.set(0);
+      strongshoot();
     }
 
     if (Shoot_Joy.getRawButton(3)){
-      //if (sensorColor.getProximity() < 5.0){
-        //MotorPI.set(0);
-        
-        //MotorPE.set(0.7);
-      //}else {
+      if (sensorColor.getProximity() > 400){
+        MotorPI.set(0);
+        MotorPE.set(0.7);
+      }else {
         MotorPE.set(0.5);
-        MotorPI.set(-0.7);
-      //}
+        MotorPI.set(-1);
+      }
       
 
     } else {
@@ -306,15 +448,18 @@ public class Robot extends TimedRobot {
 
     /**/
 
-    if (Shoot_Joy.getPOV() == 0){
+    if (Shoot_Joy.getPOV() == 180){
       elevador1.set(1);
       elevador2.set(1);
-    } else if (Shoot_Joy.getPOV() == 180){
-      elevador1.set(-1);
-      elevador2.set(-1);
+      elevadorSec.set(1);
+    } else if (Shoot_Joy.getPOV() == 0){
+      elevador1.set(-0.3);
+      elevador2.set(-0.3);
+      elevadorSec.set(-1);
     } else {
       elevador1.set(0);
       elevador2.set(0);
+      elevadorSec.set(0);
     }
 
     if (Shoot_Joy.getPOV() == 90) {
@@ -334,14 +479,16 @@ public class Robot extends TimedRobot {
   }
   /** This function is called periodically during test mode. */
   @Override
-  public void testPeriodic() {}
+  public void testPeriodic() {
+
+  }
   
   
   
   public void RobotMove(double forward, double rotation){
     
-    double leftPower = RangoT(-forward + (rotation * 0.5),-1,1);
-    double rightPower = -RangoT(-forward - (rotation * 0.5),-1,1);
+    double leftPower = RangoT(-forward + (rotation * 0.35),-1,1);
+    double rightPower = -RangoT(-forward - (rotation * 0.35),-1,1);
     
     chasis_motorL1.set(leftPower);
     chasis_motorR1.set(rightPower);
@@ -363,4 +510,89 @@ public class Robot extends TimedRobot {
     if (number > max) return max;
     return number;
   }
+
+  public void strongshoot(){
+    // Mover las pelotas para atrás
+    RobotMove(0, 0);
+    MotorPI.set(1);
+    MotorPE.set(-0.5);
+    shooter2.set(0.4);
+    Timer.delay(0.16);
+
+    // Parar el motor de abajo y encender el shooter
+    MotorPI.set(0);
+    MotorPE.set(0);
+    shooter1.set(-1);
+    shooter2.set(-1);
+
+    Timer.delay(1);
+    // Mover las pelotas para arriba
+    MotorPI.set(-0.7);
+
+    // Delay más largo por si son 2 pelotas
+    Timer.delay(0.12);
+    MotorPI.set(0);
+    Timer.delay(0.45);
+    MotorPI.set(-0.7);
+    Timer.delay(0.5);
+
+    // Parar los 3 motores
+    MotorPI.set(0);
+    shooter1.set(0);
+    shooter2.set(0);
+  }
+
+  public void autShoot(){
+
+    // Parar el motor de abajo y encender el shooter
+    MotorPI.set(0);
+    MotorPE.set(0);
+    shooter1.set(-1);
+    shooter2.set(-1);
+
+    Timer.delay(1);
+    // Mover las pelotas para arriba
+    MotorPI.set(-0.7);
+
+    // Delay más largo por si son 2 pelotas
+    Timer.delay(0.12);
+    MotorPI.set(0);
+    Timer.delay(0.45);
+    MotorPI.set(-0.7);
+    Timer.delay(0.5);
+
+    // Parar los 3 motores
+    MotorPI.set(0);
+    shooter1.set(0);
+    shooter2.set(0);
+  }
+
+
+  public void lowShoot(){
+    // Mover las pelotas para atrás
+    RobotMove(0, 0);
+    MotorPI.set(1);
+    MotorPE.set(-0.6);
+    shooter2.set(0.4);
+    Timer.delay(0.15);
+
+    // Parar el motor de abajo y encender el shooter
+    MotorPI.set(0);
+    MotorPE.set(0);
+    shooter1.set(-0.8);
+    shooter2.set(-0.8);
+
+    Timer.delay(1);
+    // Mover las pelotas para arriba
+    MotorPI.set(-1);
+
+    // Delay más largo por si son 2 pelotas
+    Timer.delay(1.5);
+
+    // Parar los 3 motores
+    MotorPI.set(0);
+    shooter1.set(0);
+    shooter2.set(0);
+  }
+  
 }
